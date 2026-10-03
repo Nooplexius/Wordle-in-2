@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Wordle Solver</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: #121213;
+    color: #f0f0f0;
+    min-height: 100vh;
+    padding: 24px 12px;
+  }
+  .container { max-width: 460px; margin: 0 auto; }
+  h1 {
+    text-align: center;
+    margin: 0 0 16px;
+    font-size: 28px;
+    letter-spacing: 1px;
+    border-bottom: 1px solid #3a3a3c;
+    padding-bottom: 12px;
+  }
+  #recommendation {
+    background: #1a1a1b;
+    border: 1px solid #3a3a3c;
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+  .rec-label {
+    font-size: 13px;
+    color: #a0a0a0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+  }
+  #rec-word {
+    font-size: 32px;
+    font-weight: bold;
+    letter-spacing: 4px;
+    margin: 4px 0;
+    min-height: 40px;
+  }
+  #rec-word.error { color: #ff6b6b; font-size: 18px; letter-spacing: normal; }
+  #rec-info { font-size: 13px; color: #888; }
+  #top-guesses {
+    margin-top: 12px;
+    text-align: left;
+  }
+  #top-guesses:not(:empty) {
+    border-top: 1px solid #2a2a2c;
+    padding-top: 8px;
+  }
+  .top-guess-row {
+    display: grid;
+    grid-template-columns: 20px 1fr 90px 84px;
+    gap: 8px;
+    font-size: 13px;
+    padding: 3px 4px;
+    align-items: baseline;
+  }
+  .top-guess-row span:nth-child(3),
+  .top-guess-row span:nth-child(4) { text-align: right; }
+  .top-guess-row.header {
+    color: #777;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .top-guess-row .rank { color: #777; }
+  .top-guess-row .word { font-weight: bold; letter-spacing: 2px; }
+  .top-guess-row .pct { color: #ccc; font-variant-numeric: tabular-nums; }
+  .top-guess-row:first-of-type + .top-guess-row .word { color: #b6e6b3; }
+  #grid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+    width: 100%;
+  }
+  .tile {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px;
+    font-weight: bold;
+    text-transform: uppercase;
+    background: #121213;
+    border: 2px solid #3a3a3a;
+    color: #fff;
+    user-select: none;
+    transition: background-color 0.15s, border-color 0.15s;
+  }
+  .row.current .tile.clickable { cursor: pointer; }
+  .row.current .tile.has-letter { border-color: #565758; }
+  .row.current .tile.cursor { border-color: #888; }
+  .tile.gray { background: #3a3a3c; border-color: #3a3a3c; }
+  .tile.yellow { background: #b59f3b; border-color: #b59f3b; }
+  .tile.green { background: #538d4e; border-color: #538d4e; }
+  .controls {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+  .controls button {
+    background: #3a3a3c;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: inherit;
+  }
+  .controls button:hover:not(:disabled) { background: #4a4a4c; }
+  .controls button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .controls button.primary { background: #538d4e; }
+  .controls button.primary:hover:not(:disabled) { background: #64a85a; }
+  details {
+    background: #1a1a1b;
+    border: 1px solid #3a3a3c;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-top: 8px;
+    font-size: 14px;
+  }
+  details summary { cursor: pointer; padding: 4px 0; }
+  #possible-list {
+    margin-top: 8px;
+    max-height: 220px;
+    overflow-y: auto;
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 12px;
+    color: #ccc;
+    line-height: 1.6;
+    word-spacing: 4px;
+  }
+  .help {
+    font-size: 12px;
+    color: #888;
+    text-align: center;
+    margin-top: 16px;
+    line-height: 1.6;
+  }
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #888;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: -1px;
+    margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid #3a3a3c;
+    margin-bottom: 18px;
+  }
+  .tab-button {
+    background: transparent;
+    color: #888;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-family: inherit;
+    margin-bottom: -1px;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .tab-button:hover { color: #ccc; }
+  .tab-button.active {
+    color: #f0f0f0;
+    border-bottom-color: #538d4e;
+  }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  #explorer-controls {
+    background: #1a1a1b;
+    border: 1px solid #3a3a3c;
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+  }
+  #explorer-controls .rec-label { margin-bottom: 8px; }
+  #explorer-input {
+    background: #121213;
+    color: #fff;
+    border: 2px solid #3a3a3c;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 22px;
+    font-weight: bold;
+    letter-spacing: 4px;
+    width: 100%;
+    text-align: center;
+    text-transform: uppercase;
+    font-family: inherit;
+    display: block;
+  }
+  #explorer-input:focus { outline: none; border-color: #538d4e; }
+  #explorer-input.invalid { border-color: #ff6b6b; }
+  #explorer-scope { font-size: 13px; color: #888; margin-top: 10px; text-align: center; }
+  #explorer-status { font-size: 13px; color: #888; margin-top: 6px; text-align: center; min-height: 18px; }
+  #explorer-status.error { color: #ff6b6b; }
+
+  #explorer-table {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .partition-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 6px 10px;
+    background: #1a1a1b;
+    border: 1px solid #2a2a2c;
+    border-radius: 4px;
+  }
+  .partition-row .mini-tiles {
+    display: flex;
+    gap: 3px;
+  }
+  .mini-tile {
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: bold;
+    text-transform: uppercase;
+    background: #3a3a3c;
+    color: #fff;
+    border-radius: 2px;
+  }
+  .mini-tile.gray { background: #3a3a3c; }
+  .mini-tile.yellow { background: #b59f3b; }
+  .mini-tile.green { background: #538d4e; }
+  .partition-row .count {
+    font-size: 13px;
+    color: #ccc;
+    font-variant-numeric: tabular-nums;
+    text-align: left;
+  }
+  .partition-row .next-best {
+    font-weight: bold;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #f0f0f0;
+    font-variant-numeric: tabular-nums;
+  }
+  .partition-row.singleton .next-best { color: #b6e6b3; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Wordle Solver</h1>
+
+  <div class="tabs" role="tablist">
+    <button class="tab-button active" data-tab="solver" role="tab">Solver</button>
+    <button class="tab-button" data-tab="explorer" role="tab">Explorer</button>
+  </div>
+
+  <div id="solver-tab" class="tab-content active" role="tabpanel">
+    <div id="recommendation">
+      <div class="rec-label">Recommended next guess</div>
+      <div id="rec-word"><span class="spinner"></span>Loading&hellip;</div>
+      <div id="rec-info"></div>
+      <div id="top-guesses"></div>
+    </div>
+
+    <div id="grid"></div>
+
+    <div class="controls">
+      <button id="submit-btn" class="primary" disabled>Submit Row</button>
+      <button id="undo-btn" disabled>Undo</button>
+      <button id="reset-btn">Reset</button>
+    </div>
+
+    <details id="possible-answers">
+      <summary>Possible answers (<span id="possible-count">&hellip;</span>)</summary>
+      <div id="possible-list"></div>
+    </details>
+
+    <div class="help">
+      Type letters to fill the current row. Click each tile to cycle through
+      <strong style="color:#888">gray</strong> &rarr;
+      <strong style="color:#b59f3b">yellow</strong> &rarr;
+      <strong style="color:#538d4e">green</strong>.<br>
+      Press <strong>Enter</strong> or click <em>Submit Row</em> to lock in the feedback and get the next recommendation.
+    </div>
+  </div>
+
+  <div id="explorer-tab" class="tab-content" role="tabpanel">
+    <div id="explorer-controls">
+      <div class="rec-label">Explore guess</div>
+      <input id="explorer-input" type="text" maxlength="5" autocomplete="off"
+             spellcheck="false" placeholder="e.g. SLATE" />
+      <div id="explorer-scope">&hellip;</div>
+      <div id="explorer-status"></div>
+    </div>
+
+    <div id="explorer-table"></div>
+
+    <div class="help">
+      For each possible feedback the entered guess could produce, this lists how many
+      remaining answers would match and the optimal next guess for that branch.
+      Rows are sorted by frequency (most common feedback first).
+    </div>
+  </div>
+</div>
+
+<script src="Answers.js"></script>
+<script>
+"use strict";
+
+const ANSWERS = official_answers;
+const N = ANSWERS.length;
+const MAX_DEPTH = 6;
+
+let FEEDBACK_TABLE = null;
+let solveMemo = new Map();
+
+const gameState = {
+  rows: [],
+  current: { guess: "", feedback: [0, 0, 0, 0, 0] },
+};
+
+let computeToken = 0;
+
+function computeFeedbackFromCodes(w, a) {
+  let r0 = 0, r1 = 0, r2 = 0, r3 = 0, r4 = 0;
+  let u0 = 0, u1 = 0, u2 = 0, u3 = 0, u4 = 0;
+
+  if (w[0] === a[0]) { r0 = 2; u0 = 1; }
+  if (w[1] === a[1]) { r1 = 2; u1 = 1; }
+  if (w[2] === a[2]) { r2 = 2; u2 = 1; }
+  if (w[3] === a[3]) { r3 = 2; u3 = 1; }
+  if (w[4] === a[4]) { r4 = 2; u4 = 1; }
+
+  if (r0 === 0) {
+    const c = w[0];
+    if (!u1 && c === a[1]) { r0 = 1; u1 = 1; }
+    else if (!u2 && c === a[2]) { r0 = 1; u2 = 1; }
+    else if (!u3 && c === a[3]) { r0 = 1; u3 = 1; }
+    else if (!u4 && c === a[4]) { r0 = 1; u4 = 1; }
+  }
+  if (r1 === 0) {
+    const c = w[1];
+    if (!u0 && c === a[0]) { r1 = 1; u0 = 1; }
+    else if (!u2 && c === a[2]) { r1 = 1; u2 = 1; }
+    else if (!u3 && c === a[3]) { r1 = 1; u3 = 1; }
+    else if (!u4 && c === a[4]) { r1 = 1; u4 = 1; }
+  }
+  if (r2 === 0) {
+    const c = w[2];
+    if (!u0 && c === a[0]) { r2 = 1; u0 = 1; }
+    else if (!u1 && c === a[1]) { r2 = 1; u1 = 1; }
+    else if (!u3 && c === a[3]) { r2 = 1; u3 = 1; }
+    else if (!u4 && c === a[4]) { r2 = 1; u4 = 1; }
+  }
+  if (r3 === 0) {
+    const c = w[3];
+    if (!u0 && c === a[0]) { r3 = 1; u0 = 1; }
+    else if (!u1 && c === a[1]) { r3 = 1; u1 = 1; }
+    else if (!u2 && c === a[2]) { r3 = 1; u2 = 1; }
+    else if (!u4 && c === a[4]) { r3 = 1; u4 = 1; }
+  }
+  if (r4 === 0) {
+    const c = w[4];
+    if (!u0 && c === a[0]) { r4 = 1; u0 = 1; }
+    else if (!u1 && c === a[1]) { r4 = 1; u1 = 1; }
+    else if (!u2 && c === a[2]) { r4 = 1; u2 = 1; }
+    else if (!u3 && c === a[3]) { r4 = 1; u3 = 1; }
+  }
+
+  return r0 + r1 * 3 + r2 * 9 + r3 * 27 + r4 * 81;
+}
+
+function computeFeedbackStrings(guess, answer) {
+  const result = [0, 0, 0, 0, 0];
+  const used = [false, false, false, false, false];
+  for (let i = 0; i < 5; i++) {
+    if (guess.charCodeAt(i) === answer.charCodeAt(i)) {
+      result[i] = 2;
+      used[i] = true;
+    }
+  }
+  for (let i = 0; i < 5; i++) {
+    if (result[i] === 0) {
+      const gc = guess.charCodeAt(i);
+      for (let j = 0; j < 5; j++) {
+        if (!used[j] && gc === answer.charCodeAt(j)) {
+          result[i] = 1;
+          used[j] = true;
+          break;
+        }
+      }
+    }
+  }
+  return result;
+}
+
+async function precomputeFeedback() {
+  FEEDBACK_TABLE = new Uint8Array(N * N);
+  const codes = new Array(N);
+  for (let i = 0; i < N; i++) {
+    const w = ANSWERS[i];
+    codes[i] = Uint8Array.of(
+      w.charCodeAt(0), w.charCodeAt(1), w.charCodeAt(2), w.charCodeAt(3), w.charCodeAt(4)
+    );
+  }
+  const chunkSize = 80;
+  for (let wi = 0; wi < N; wi++) {
+    const wc = codes[wi];
+    const offset = wi * N;
+    for (let ai = 0; ai < N; ai++) {
+      FEEDBACK_TABLE[offset + ai] = computeFeedbackFromCodes(wc, codes[ai]);
+    }
+    if ((wi + 1) % chunkSize === 0 || wi === N - 1) {
+      setComputingMessage(`Initializing&hellip; ${Math.round(((wi + 1) / N) * 100)}%`);
+      await sleep(0);
+    }
+  }
+}
+
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+function getPartitions(W, S) {
+  const buckets = new Array(243);
+  const offset = W * N;
+  for (let j = 0; j < S.length; j++) {
+    const A = S[j];
+    const pat = FEEDBACK_TABLE[offset + A];
+    if (buckets[pat] === undefined) buckets[pat] = [];
+    buckets[pat].push(A);
+  }
+  const result = [];
+  for (let p = 0; p < 243; p++) {
+    if (buckets[p] !== undefined) result.push(buckets[p]);
+  }
+  return result;
+}
+
+function solve(S, maxDepth) {
+  if (S.length === 1) {
+    return { bestWord: S[0], tuple: new Array(maxDepth - 1).fill(1) };
+  }
+  if (S.length === 0) {
+    return { bestWord: -1, tuple: new Array(maxDepth - 1).fill(0) };
+  }
+
+  const key = S.length + ":" + S.join(",");
+  const cached = solveMemo.get(key);
+  if (cached) return cached;
+
+  const bucketCount = new Uint16Array(243);
+  const ms = new Uint16Array(S.length);
+  let maxM = 0;
+  for (let i = 0; i < S.length; i++) {
+    bucketCount.fill(0);
+    const offset = S[i] * N;
+    let m = 0;
+    for (let j = 0; j < S.length; j++) {
+      const pat = FEEDBACK_TABLE[offset + S[j]];
+      if (bucketCount[pat]++ === 0) m++;
+    }
+    ms[i] = m;
+    if (m > maxM) maxM = m;
+  }
+
+  const tied = [];
+  for (let i = 0; i < S.length; i++) {
+    if (ms[i] === maxM) {
+      const W = S[i];
+      tied.push({ W, partitions: getPartitions(W, S), deepC: [] });
+    }
+  }
+
+  for (let d = 3; d <= maxDepth && tied.length > 1; d++) {
+    let maxDeep = -1;
+    for (const cand of tied) {
+      let sum = 0;
+      const parts = cand.partitions;
+      for (let p = 0; p < parts.length; p++) {
+        const members = parts[p];
+        if (members.length === 1) {
+          sum += 1;
+        } else {
+          sum += solve(members, maxDepth).tuple[d - 3];
+        }
+      }
+      cand.deepC.push(sum);
+      if (sum > maxDeep) maxDeep = sum;
+    }
+    let writeIdx = 0;
+    for (let i = 0; i < tied.length; i++) {
+      if (tied[i].deepC[tied[i].deepC.length - 1] === maxDeep) {
+        tied[writeIdx++] = tied[i];
+      }
+    }
+    tied.length = writeIdx;
+  }
+
+  let best = tied[0];
+  for (let i = 1; i < tied.length; i++) {
+    if (ANSWERS[tied[i].W] > ANSWERS[best.W]) best = tied[i];
+  }
+
+  const tuple = [maxM];
+  for (let i = 0; i < best.deepC.length; i++) tuple.push(best.deepC[i]);
+  while (tuple.length < maxDepth - 1) {
+    const dCompute = tuple.length + 2;
+    let sum = 0;
+    const parts = best.partitions;
+    for (let p = 0; p < parts.length; p++) {
+      const members = parts[p];
+      if (members.length === 1) {
+        sum += 1;
+      } else {
+        sum += solve(members, maxDepth).tuple[dCompute - 3];
+      }
+    }
+    tuple.push(sum);
+  }
+
+  const result = { bestWord: best.W, tuple };
+  solveMemo.set(key, result);
+  return result;
+}
+
+function computeDeepTuple(W, S) {
+  const parts = getPartitions(W, S);
+  const tuple = [parts.length];
+  for (let d = 3; d <= MAX_DEPTH; d++) {
+    let sum = 0;
+    for (let p = 0; p < parts.length; p++) {
+      const members = parts[p];
+      sum += members.length === 1 ? 1 : solve(members, MAX_DEPTH).tuple[d - 3];
+    }
+    tuple.push(sum);
+  }
+  return tuple;
+}
+
+function compareCandidates(a, b) {
+  for (let i = 0; i < a.tuple.length; i++) {
+    if (a.tuple[i] !== b.tuple[i]) return b.tuple[i] - a.tuple[i];
+  }
+  return ANSWERS[a.W] > ANSWERS[b.W] ? -1 : 1;
+}
+
+const topGuessMemo = new Map();
+
+// Returns the top-k candidates in S ranked by the full criteria tuple
+// (lex max, alphabetical-last tiebreak), or null if cancelled.
+async function computeTopGuesses(S, k, token) {
+  if (S.length === 1) {
+    return [{ W: S[0], tuple: new Array(MAX_DEPTH - 1).fill(1) }];
+  }
+
+  const topKey = k + "|" + S.length + ":" + S.join(",");
+  const cachedTop = topGuessMemo.get(topKey);
+  if (cachedTop) return cachedTop;
+
+  const bucketCount = new Uint16Array(243);
+  const ms = new Uint16Array(S.length);
+  const large = S.length > 250;
+  for (let i = 0; i < S.length; i++) {
+    bucketCount.fill(0);
+    const offset = S[i] * N;
+    let m = 0;
+    for (let j = 0; j < S.length; j++) {
+      const pat = FEEDBACK_TABLE[offset + S[j]];
+      if (bucketCount[pat]++ === 0) m++;
+    }
+    ms[i] = m;
+    if (large && (i + 1) % 100 === 0) {
+      setComputingMessage(`Evaluating candidates&hellip; ${Math.round(((i + 1) / S.length) * 100)}%`);
+      await sleep(0);
+      if (token !== computeToken) return null;
+    }
+  }
+
+  // Candidates with a smaller bucket count can never outrank ones with a
+  // larger count, so only the top-m prefix (extended through the tied group
+  // at the k-th position) needs full deep-tuple evaluation.
+  const order = new Array(S.length);
+  for (let i = 0; i < S.length; i++) order[i] = i;
+  order.sort((a, b) => ms[b] - ms[a]);
+  let cut = Math.min(k, S.length);
+  while (cut < S.length && ms[order[cut]] === ms[order[cut - 1]]) cut++;
+
+  const cands = [];
+  for (let bi = 0; bi < cut; bi++) {
+    cands.push({ W: S[order[bi]], tuple: computeDeepTuple(S[order[bi]], S) });
+    setComputingMessage(`Ranking top guesses&hellip; ${bi + 1}/${cut}`);
+    await sleep(0);
+    if (token !== computeToken) return null;
+  }
+
+  cands.sort(compareCandidates);
+  const top = cands.slice(0, k);
+  solveMemo.set(S.length + ":" + S.join(","), { bestWord: top[0].W, tuple: top[0].tuple });
+  topGuessMemo.set(topKey, top);
+  return top;
+}
+
+function filterPossible() {
+  if (gameState.rows.length === 0) {
+    const all = new Array(N);
+    for (let i = 0; i < N; i++) all[i] = i;
+    return all;
+  }
+  const out = [];
+  for (let i = 0; i < N; i++) {
+    const A = ANSWERS[i];
+    let ok = true;
+    for (let r = 0; r < gameState.rows.length; r++) {
+      const row = gameState.rows[r];
+      const fb = computeFeedbackStrings(row.guess, A);
+      if (fb[0] !== row.feedback[0] || fb[1] !== row.feedback[1] ||
+          fb[2] !== row.feedback[2] || fb[3] !== row.feedback[3] ||
+          fb[4] !== row.feedback[4]) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) out.push(i);
+  }
+  return out;
+}
+
+const grid = document.getElementById("grid");
+const recWord = document.getElementById("rec-word");
+const recInfo = document.getElementById("rec-info");
+const topGuessesEl = document.getElementById("top-guesses");
+const possibleCount = document.getElementById("possible-count");
+const possibleList = document.getElementById("possible-list");
+const submitBtn = document.getElementById("submit-btn");
+const undoBtn = document.getElementById("undo-btn");
+const resetBtn = document.getElementById("reset-btn");
+
+function render() {
+  grid.innerHTML = "";
+  for (let r = 0; r < 6; r++) {
+    const row = document.createElement("div");
+    row.className = "row";
+    let guess = "";
+    let feedback = [0, 0, 0, 0, 0];
+    let isLocked = false;
+    let isCurrent = false;
+    if (r < gameState.rows.length) {
+      guess = gameState.rows[r].guess;
+      feedback = gameState.rows[r].feedback;
+      isLocked = true;
+    } else if (r === gameState.rows.length) {
+      guess = gameState.current.guess;
+      feedback = gameState.current.feedback;
+      isCurrent = true;
+      row.classList.add("current");
+    }
+    const cursorPos = isCurrent ? guess.length : -1;
+    for (let c = 0; c < 5; c++) {
+      const tile = document.createElement("div");
+      tile.className = "tile";
+      const letter = guess[c] || "";
+      tile.textContent = letter;
+      if (letter) tile.classList.add("has-letter");
+      const fb = feedback[c];
+      if (letter || isLocked) {
+        if (fb === 0) tile.classList.add("gray");
+        else if (fb === 1) tile.classList.add("yellow");
+        else if (fb === 2) tile.classList.add("green");
+      }
+      if (isCurrent) {
+        tile.classList.add("clickable");
+        tile.dataset.col = c;
+        if (c === cursorPos) tile.classList.add("cursor");
+      }
+      row.appendChild(tile);
+    }
+    grid.appendChild(row);
+  }
+  undoBtn.disabled = gameState.rows.length === 0;
+  submitBtn.disabled = gameState.current.guess.length !== 5 || gameState.rows.length >= 6;
+}
+
+function setComputingMessage(html) {
+  recWord.className = "";
+  recWord.innerHTML = `<span class="spinner"></span>${html}`;
+  recInfo.textContent = "";
+  topGuessesEl.innerHTML = "";
+}
+
+function renderTopGuesses(top, total) {
+  topGuessesEl.innerHTML = "";
+  if (top.length <= 1) return;
+  const header = document.createElement("div");
+  header.className = "top-guess-row header";
+  header.innerHTML =
+    "<span></span><span>Guess</span><span>Solve by next</span><span>In &le;2 more</span>";
+  topGuessesEl.appendChild(header);
+  for (let i = 0; i < top.length; i++) {
+    const t = top[i];
+    const row = document.createElement("div");
+    row.className = "top-guess-row";
+    const p1 = ((t.tuple[0] / total) * 100).toFixed(1);
+    const p2 = ((Math.min(t.tuple[1], total) / total) * 100).toFixed(1);
+    row.innerHTML =
+      `<span class="rank">${i + 1}</span>` +
+      `<span class="word">${ANSWERS[t.W]}</span>` +
+      `<span class="pct">${p1}%</span>` +
+      `<span class="pct">${p2}%</span>`;
+    topGuessesEl.appendChild(row);
+  }
+}
+
+function showRecommendation(top, possible) {
+  const word = ANSWERS[top[0].W];
+  recWord.className = "";
+  recWord.innerHTML = "";
+  recWord.textContent = word;
+  recInfo.textContent =
+    `${possible.length} possible answer${possible.length === 1 ? "" : "s"} remaining`;
+  possibleCount.textContent = possible.length;
+  possibleList.textContent = possible.map((i) => ANSWERS[i]).join("  ");
+  renderTopGuesses(top, possible.length);
+  prefillExplorerOnce(word);
+}
+
+function showError(msg) {
+  recWord.className = "error";
+  recWord.innerHTML = "";
+  recWord.textContent = "No match";
+  recInfo.textContent = msg;
+  possibleCount.textContent = "0";
+  possibleList.textContent = "";
+  topGuessesEl.innerHTML = "";
+}
+
+async function recompute() {
+  if (!FEEDBACK_TABLE) return;
+  const myToken = ++computeToken;
+  setComputingMessage("Filtering possible answers&hellip;");
+  await sleep(16);
+  if (myToken !== computeToken) return;
+
+  const possible = filterPossible();
+  if (possible.length === 0) {
+    showError("No possible answers match the given feedback.");
+    return;
+  }
+
+  setComputingMessage(
+    possible.length > 250
+      ? "Computing optimal guess (this can take a few seconds)&hellip;"
+      : "Computing&hellip;"
+  );
+  await sleep(0);
+  if (myToken !== computeToken) return;
+
+  const top = await computeTopGuesses(possible, 5, myToken);
+  if (top === null || myToken !== computeToken) return;
+  showRecommendation(top, possible);
+}
+
+grid.addEventListener("click", (e) => {
+  const t = e.target;
+  if (!(t instanceof HTMLElement)) return;
+  if (!t.classList.contains("tile") || !t.classList.contains("clickable")) return;
+  const col = parseInt(t.dataset.col, 10);
+  if (gameState.current.guess[col] === undefined) return;
+  gameState.current.feedback[col] = (gameState.current.feedback[col] + 1) % 3;
+  render();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+  if (e.key === "Enter") {
+    e.preventDefault();
+    if (gameState.current.guess.length === 5 && gameState.rows.length < 6) submitRow();
+    return;
+  }
+  if (e.key === "Backspace") {
+    e.preventDefault();
+    if (gameState.current.guess.length > 0) {
+      const col = gameState.current.guess.length - 1;
+      gameState.current.guess = gameState.current.guess.slice(0, -1);
+      gameState.current.feedback[col] = 0;
+      render();
+    }
+    return;
+  }
+  if (e.key.length === 1 && /^[a-zA-Z]$/.test(e.key)) {
+    if (gameState.current.guess.length < 5 && gameState.rows.length < 6) {
+      gameState.current.guess += e.key.toUpperCase();
+      render();
+    }
+  }
+});
+
+function submitRow() {
+  if (gameState.current.guess.length !== 5) return;
+  if (gameState.rows.length >= 6) return;
+  gameState.rows.push({
+    guess: gameState.current.guess,
+    feedback: gameState.current.feedback.slice(),
+  });
+  gameState.current = { guess: "", feedback: [0, 0, 0, 0, 0] };
+  render();
+  recompute();
+  invalidateExplorer();
+}
+
+submitBtn.addEventListener("click", submitRow);
+
+undoBtn.addEventListener("click", () => {
+  if (gameState.rows.length === 0) return;
+  gameState.rows.pop();
+  gameState.current = { guess: "", feedback: [0, 0, 0, 0, 0] };
+  render();
+  recompute();
+  invalidateExplorer();
+});
+
+resetBtn.addEventListener("click", () => {
+  gameState.rows = [];
+  gameState.current = { guess: "", feedback: [0, 0, 0, 0, 0] };
+  render();
+  recompute();
+  invalidateExplorer();
+});
+
+// --- Explorer ---
+
+const explorerInputEl = document.getElementById("explorer-input");
+const explorerScopeEl = document.getElementById("explorer-scope");
+const explorerStatusEl = document.getElementById("explorer-status");
+const explorerTableEl = document.getElementById("explorer-table");
+const solverTabEl = document.getElementById("solver-tab");
+const explorerTabEl = document.getElementById("explorer-tab");
+
+const explorerState = {
+  needsRecompute: true,
+  prefilled: false,
+};
+let explorerDebounceTimer = null;
+
+function patternToColors(p) {
+  const out = [0, 0, 0, 0, 0];
+  for (let i = 0; i < 5; i++) {
+    out[i] = p % 3;
+    p = (p / 3) | 0;
+  }
+  return out;
+}
+
+function setExplorerStatus(html, isError) {
+  explorerStatusEl.className = isError ? "error" : "";
+  explorerStatusEl.innerHTML = html;
+}
+
+function updateExplorerScope(possibleCount) {
+  const submitted = gameState.rows.length;
+  if (submitted === 0) {
+    explorerScopeEl.textContent =
+      `${possibleCount} possible answer${possibleCount === 1 ? "" : "s"} (full answer set)`;
+  } else {
+    explorerScopeEl.textContent =
+      `${possibleCount} possible answer${possibleCount === 1 ? "" : "s"} (after ${submitted} submitted guess${submitted === 1 ? "" : "es"})`;
+  }
+}
+
+function renderExplorerTable(rows, guessWord, total) {
+  explorerTableEl.innerHTML = "";
+  for (const r of rows) {
+    const rowEl = document.createElement("div");
+    rowEl.className = "partition-row";
+    if (r.count === 1) rowEl.classList.add("singleton");
+
+    const tilesEl = document.createElement("div");
+    tilesEl.className = "mini-tiles";
+    const colors = patternToColors(r.pattern);
+    for (let i = 0; i < 5; i++) {
+      const mt = document.createElement("div");
+      mt.className =
+        "mini-tile " + (colors[i] === 0 ? "gray" : colors[i] === 1 ? "yellow" : "green");
+      mt.textContent = guessWord[i];
+      tilesEl.appendChild(mt);
+    }
+    rowEl.appendChild(tilesEl);
+
+    const countEl = document.createElement("div");
+    countEl.className = "count";
+    const pct = ((r.count / total) * 100).toFixed(1);
+    countEl.textContent = `${r.count} / ${total}  (${pct}%)`;
+    rowEl.appendChild(countEl);
+
+    const nextEl = document.createElement("div");
+    nextEl.className = "next-best";
+    nextEl.textContent = r.nextBest;
+    rowEl.appendChild(nextEl);
+
+    explorerTableEl.appendChild(rowEl);
+  }
+}
+
+async function exploreGuess(guessWord, S, token) {
+  const W = ANSWERS.indexOf(guessWord);
+  if (W === -1) return { error: "Not in the official answer list." };
+
+  const buckets = new Array(243);
+  const offset = W * N;
+  for (let j = 0; j < S.length; j++) {
+    const A = S[j];
+    const pat = FEEDBACK_TABLE[offset + A];
+    if (buckets[pat] === undefined) buckets[pat] = [];
+    buckets[pat].push(A);
+  }
+
+  let totalNonEmpty = 0;
+  for (let p = 0; p < 243; p++) if (buckets[p] !== undefined) totalNonEmpty++;
+
+  const rows = [];
+  let processed = 0;
+  for (let p = 0; p < 243; p++) {
+    if (buckets[p] === undefined) continue;
+    const members = buckets[p];
+    let nextBest;
+    if (members.length === 1) {
+      nextBest = ANSWERS[members[0]];
+    } else {
+      const r = solve(members, MAX_DEPTH);
+      nextBest = ANSWERS[r.bestWord];
+    }
+    rows.push({ pattern: p, count: members.length, nextBest });
+    processed++;
+    if (processed % 8 === 0) {
+      setExplorerStatus(
+        `<span class="spinner"></span>Computing branch ${processed}/${totalNonEmpty}&hellip;`,
+        false
+      );
+      await sleep(0);
+      if (token !== computeToken) return null;
+    }
+  }
+
+  rows.sort((a, b) => b.count - a.count || a.pattern - b.pattern);
+  return { rows };
+}
+
+async function recomputeExplorer() {
+  if (!FEEDBACK_TABLE) {
+    setExplorerStatus(`<span class="spinner"></span>Initializing&hellip;`, false);
+    explorerState.needsRecompute = true;
+    return;
+  }
+
+  const raw = (explorerInputEl.value || "").toUpperCase();
+  if (raw.length !== 5) {
+    explorerInputEl.classList.toggle("invalid", raw.length > 0);
+    setExplorerStatus(raw.length === 0 ? "Enter a 5-letter guess to explore." : "Enter all 5 letters.", raw.length > 0);
+    explorerTableEl.innerHTML = "";
+    explorerScopeEl.textContent = "";
+    return;
+  }
+  if (ANSWERS.indexOf(raw) === -1) {
+    explorerInputEl.classList.add("invalid");
+    setExplorerStatus("Not in the official answer list.", true);
+    explorerTableEl.innerHTML = "";
+    explorerScopeEl.textContent = "";
+    return;
+  }
+  explorerInputEl.classList.remove("invalid");
+
+  const myToken = ++computeToken;
+  const possible = filterPossible();
+  updateExplorerScope(possible.length);
+
+  if (possible.length === 0) {
+    setExplorerStatus("No possible answers match the current solver state.", true);
+    explorerTableEl.innerHTML = "";
+    return;
+  }
+
+  setExplorerStatus(`<span class="spinner"></span>Computing&hellip;`, false);
+  await sleep(16);
+  if (myToken !== computeToken) return;
+
+  const result = await exploreGuess(raw, possible, myToken);
+  if (result === null || myToken !== computeToken) return;
+  if (result.error) {
+    setExplorerStatus(result.error, true);
+    explorerTableEl.innerHTML = "";
+    return;
+  }
+
+  setExplorerStatus(
+    `${result.rows.length} distinct feedback pattern${result.rows.length === 1 ? "" : "s"}`,
+    false
+  );
+  renderExplorerTable(result.rows, raw, possible.length);
+  explorerState.needsRecompute = false;
+}
+
+function invalidateExplorer() {
+  explorerState.needsRecompute = true;
+  if (explorerTabEl.classList.contains("active")) {
+    recomputeExplorer();
+  }
+}
+
+function prefillExplorerOnce(word) {
+  if (explorerState.prefilled) return;
+  if (!word) return;
+  if (!explorerInputEl.value) {
+    explorerInputEl.value = word;
+  }
+  explorerState.prefilled = true;
+  if (explorerTabEl.classList.contains("active")) {
+    recomputeExplorer();
+  }
+}
+
+function switchTab(tabId) {
+  document.querySelectorAll(".tab-button").forEach((b) => {
+    b.classList.toggle("active", b.dataset.tab === tabId);
+  });
+  solverTabEl.classList.toggle("active", tabId === "solver");
+  explorerTabEl.classList.toggle("active", tabId === "explorer");
+  if (tabId === "explorer" && explorerState.needsRecompute) {
+    recomputeExplorer();
+  }
+}
+
+document.querySelectorAll(".tab-button").forEach((b) => {
+  b.addEventListener("click", () => switchTab(b.dataset.tab));
+});
+
+explorerInputEl.addEventListener("input", () => {
+  explorerInputEl.value = explorerInputEl.value
+    .toUpperCase()
+    .replace(/[^A-Z]/g, "")
+    .slice(0, 5);
+  if (explorerDebounceTimer) clearTimeout(explorerDebounceTimer);
+  explorerDebounceTimer = setTimeout(() => {
+    if (explorerTabEl.classList.contains("active")) {
+      recomputeExplorer();
+    } else {
+      explorerState.needsRecompute = true;
+    }
+  }, 200);
+});
+
+// --- Init ---
+
+async function init() {
+  render();
+  setComputingMessage("Initializing&hellip;");
+  setExplorerStatus(`<span class="spinner"></span>Initializing&hellip;`, false);
+  await sleep(16);
+  await precomputeFeedback();
+  recompute();
+}
+
+init();
+</script>
+</body>
+</html>
