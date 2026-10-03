@@ -2,17 +2,28 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+<meta name="theme-color" content="#121213" />
+<meta name="color-scheme" content="dark" />
 <title>Wordle Solver</title>
 <style>
   * { box-sizing: border-box; }
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
   body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     background: #121213;
     color: #f0f0f0;
     min-height: 100vh;
+    min-height: 100dvh;
     padding: 24px 12px;
+  }
+  button, .tile, summary {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
   .container { max-width: 460px; margin: 0 auto; }
   h1 {
@@ -46,6 +57,15 @@
     min-height: 40px;
   }
   #rec-word.error { color: #ff6b6b; font-size: 18px; letter-spacing: normal; }
+  #rec-word.status {
+    font-size: 16px;
+    letter-spacing: normal;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+  .rec-hint { display: none; }
+  .hdr-short { display: none; }
+  .help-mobile { display: none; }
   #rec-info { font-size: 13px; color: #888; }
   #top-guesses {
     margin-top: 12px;
@@ -221,6 +241,8 @@
     text-transform: uppercase;
     font-family: inherit;
     display: block;
+    appearance: none;
+    -webkit-appearance: none;
   }
   #explorer-input:focus { outline: none; border-color: #538d4e; }
   #explorer-input.invalid { border-color: #ff6b6b; }
@@ -277,6 +299,240 @@
     font-variant-numeric: tabular-nums;
   }
   .partition-row.singleton .next-best { color: #b6e6b3; }
+
+  .keyboard { display: none; }
+  .keyboard-inner {
+    width: min(560px, 100%);
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .kb-row { display: flex; gap: 5px; }
+  .kb-spacer { flex: 0.5; }
+  .key {
+    flex: 1;
+    min-width: 0;
+    height: 48px;
+    border: none;
+    border-radius: 4px;
+    background: #818384;
+    color: #fff;
+    font-family: inherit;
+    font-size: clamp(12px, 3.5vw, 16px);
+    font-weight: 700;
+    text-transform: uppercase;
+    cursor: pointer;
+    padding: 0 2px;
+    user-select: none;
+  }
+  .key.wide {
+    flex: 1.5;
+    font-size: clamp(10px, 2.8vw, 13px);
+    letter-spacing: 0.2px;
+  }
+  .key:focus { outline: none; }
+  .key:focus-visible { outline: 2px solid #f0f0f0; outline-offset: 2px; }
+  .key:active:not(:disabled) { filter: brightness(1.15); }
+  .key:disabled { opacity: 0.35; cursor: default; }
+  .key.gray { background: #3a3a3c; }
+  .key.yellow { background: #b59f3b; }
+  .key.green { background: #538d4e; }
+  .controls button:active:not(:disabled) { background: #56575a; }
+  .controls button.primary:active:not(:disabled) { background: #6aaa64; }
+
+  @media (max-width: 1100px), ((hover: none) and (pointer: coarse)) {
+    :root {
+      --key-h: 48px;
+      --kb-gap: 6px;
+      --kb-pad: 8px;
+      --keyboard-offset: calc(
+        var(--key-h) * 3 + var(--kb-gap) * 2 + var(--kb-pad) * 2 + 1px + env(safe-area-inset-bottom, 0px)
+      );
+    }
+    body {
+      padding: 12px max(8px, env(safe-area-inset-right, 0px)) 0 max(8px, env(safe-area-inset-left, 0px));
+    }
+    body:not(.explorer-open) .container { padding-bottom: var(--keyboard-offset); }
+    body.explorer-open { padding-bottom: max(16px, env(safe-area-inset-bottom, 0px)); }
+    h1 { font-size: 22px; margin-bottom: 8px; padding-bottom: 8px; }
+    .tabs { margin-bottom: 10px; }
+    .tab-button { flex: 1; padding: 12px 8px; min-height: 44px; }
+    #solver-tab.active { display: flex; flex-direction: column; }
+    #recommendation { display: contents; }
+    .rec-main {
+      order: 1;
+      background: #1a1a1b;
+      border: 1px solid #3a3a3c;
+      border-radius: 6px;
+      padding: 8px 12px 10px;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    #grid { order: 2; }
+    .controls { order: 3; }
+    #top-guesses { order: 4; }
+    #possible-answers { order: 5; }
+    .help { order: 6; }
+    .rec-label { margin-bottom: 2px; }
+    #rec-word { font-size: 28px; letter-spacing: 3px; min-height: 0; margin: 0; }
+    #rec-info { margin-top: 2px; }
+    .rec-hint {
+      display: block;
+      font-size: 12px;
+      color: #888;
+      margin-top: 6px;
+      line-height: 1.4;
+    }
+    .rec-hint:empty { display: none; }
+    #rec-word.pickable { cursor: pointer; user-select: none; }
+    #rec-word.pickable:active { opacity: 0.72; }
+    .top-guess-row.pickable { cursor: pointer; border-radius: 4px; user-select: none; }
+    .top-guess-row.pickable:active { background: #2a2a2c; }
+    .hdr-long { display: none; }
+    .hdr-short { display: inline; }
+    .help-desktop { display: none; }
+    .help-mobile { display: inline; }
+    .top-guess-row {
+      grid-template-columns: 16px minmax(0, 1fr) minmax(0, 4.6rem) minmax(0, 4.4rem);
+      gap: 4px 6px;
+    }
+    .top-guess-row .word { letter-spacing: 1px; }
+    #grid { gap: 5px; margin-bottom: 8px; align-self: center; }
+    .row { gap: 5px; }
+    .tile { font-size: calc(var(--tile, 56px) * 0.52); }
+    .row.current .tile.clickable:active { filter: brightness(1.2); }
+    .controls { gap: 8px; margin-bottom: 12px; }
+    .controls button {
+      flex: 1 1 0;
+      min-height: 44px;
+      padding: 12px 6px;
+      white-space: nowrap;
+      font-size: clamp(11px, 3.2vw, 14px);
+    }
+    details summary { padding: 12px 0; }
+    .help { margin-top: 12px; }
+    .keyboard {
+      display: block;
+      position: fixed;
+      z-index: 20;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      background: #121213;
+      border-top: 1px solid #3a3a3c;
+      padding: var(--kb-pad);
+      padding-left: max(var(--kb-pad), env(safe-area-inset-left, 0px));
+      padding-right: max(var(--kb-pad), env(safe-area-inset-right, 0px));
+      padding-bottom: calc(var(--kb-pad) + env(safe-area-inset-bottom, 0px));
+    }
+    .keyboard-inner { gap: var(--kb-gap); }
+    .key { height: var(--key-h); }
+    .partition-row { gap: 8px; padding: 8px; }
+    .partition-row .count { min-width: 0; }
+  }
+
+  body.explorer-open .keyboard { display: none; }
+
+  @media (max-width: 480px) {
+    .partition-row {
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        "tiles next"
+        "count next";
+      column-gap: 10px;
+      row-gap: 4px;
+    }
+    .partition-row .mini-tiles { grid-area: tiles; }
+    .partition-row .count { grid-area: count; }
+    .partition-row .next-best { grid-area: next; align-self: center; }
+  }
+
+  @media (max-width: 360px) {
+    .mini-tile { width: 22px; height: 22px; font-size: 12px; }
+    h1 { font-size: 20px; }
+    :root { --kb-pad: 4px; --kb-gap: 4px; }
+    .kb-row { gap: 4px; }
+  }
+
+  @media (max-width: 1100px) and (max-height: 780px) and (orientation: portrait) {
+    body { padding-top: 8px; }
+    h1 { font-size: 20px; margin-bottom: 6px; padding-bottom: 6px; }
+    .tabs { margin-bottom: 6px; }
+    .rec-label { display: none; }
+    .rec-main { padding: 6px 10px 8px; margin-bottom: 6px; }
+    #rec-word { font-size: 26px; }
+    #grid { margin-bottom: 6px; }
+  }
+
+  @media (max-width: 1100px) and (max-height: 640px) and (orientation: portrait) {
+    :root { --key-h: 42px; --kb-gap: 4px; --kb-pad: 4px; }
+    h1 { font-size: 17px; margin-bottom: 4px; padding-bottom: 4px; }
+    .tab-button { min-height: 36px; padding: 6px 8px; }
+    .controls button { min-height: 40px; }
+  }
+
+  @media (max-width: 1100px) and (max-height: 500px) and (orientation: landscape) {
+    :root {
+      --key-h: 34px;
+      --kb-gap: 4px;
+      --kb-pad: 4px;
+      --board-max: calc(100dvh - var(--keyboard-offset) - 46px);
+    }
+    body { padding-top: 4px; }
+    h1 { display: none; }
+    .tabs { margin-bottom: 4px; }
+    .tab-button { min-height: 32px; padding: 4px 8px; }
+    #rec-word { font-size: 22px; }
+    .rec-label, .rec-hint { display: none; }
+    .container { max-width: 960px; }
+    #solver-tab.active {
+      display: grid;
+      grid-template-columns: minmax(120px, calc((var(--board-max) - 25px) / 6 * 5 + 20px)) minmax(220px, 1fr);
+      grid-template-areas:
+        "grid rec"
+        "grid controls"
+        "grid guesses"
+        "grid possible"
+        "help help";
+      column-gap: 14px;
+      row-gap: 6px;
+      align-items: start;
+    }
+    #solver-tab.active #grid {
+      grid-area: grid;
+      width: 100%;
+      margin-bottom: 0;
+      align-self: start;
+      justify-self: start;
+    }
+    #solver-tab.active .rec-main { grid-area: rec; margin-bottom: 0; padding: 6px 10px; }
+    #solver-tab.active .controls {
+      grid-area: controls;
+      justify-content: flex-start;
+      margin-bottom: 0;
+    }
+    #solver-tab.active .controls button { flex: 0 1 auto; min-width: 84px; min-height: 34px; }
+    #solver-tab.active #top-guesses { grid-area: guesses; margin-top: 0; }
+    #solver-tab.active .top-guess-row {
+      grid-template-columns: 18px 68px 72px 68px;
+      width: max-content;
+      max-width: 100%;
+    }
+    #solver-tab.active #possible-answers { grid-area: possible; margin-top: 0; }
+    #solver-tab.active .help { grid-area: help; margin-top: 2px; }
+  }
+
+  @media (max-width: 360px) and (max-height: 640px) and (orientation: portrait) {
+    h1 { font-size: 16px; margin-bottom: 2px; padding-bottom: 2px; }
+    .rec-hint { display: none; }
+    .rec-main { padding: 4px 8px 6px; margin-bottom: 4px; }
+    #grid { margin-bottom: 4px; }
+    .controls { margin-bottom: 4px; }
+    :root { --key-h: 40px; --kb-pad: 3px; --kb-gap: 3px; }
+    .kb-row { gap: 3px; }
+  }
 </style>
 </head>
 <body>
@@ -290,9 +546,12 @@
 
   <div id="solver-tab" class="tab-content active" role="tabpanel">
     <div id="recommendation">
-      <div class="rec-label">Recommended next guess</div>
-      <div id="rec-word"><span class="spinner"></span>Loading&hellip;</div>
-      <div id="rec-info"></div>
+      <div class="rec-main">
+        <div class="rec-label">Recommended next guess</div>
+        <div id="rec-word"><span class="spinner"></span>Loading&hellip;</div>
+        <div id="rec-info"></div>
+        <div id="rec-hint" class="rec-hint"></div>
+      </div>
       <div id="top-guesses"></div>
     </div>
 
@@ -310,11 +569,21 @@
     </details>
 
     <div class="help">
-      Type letters to fill the current row. Click each tile to cycle through
-      <strong style="color:#888">gray</strong> &rarr;
-      <strong style="color:#b59f3b">yellow</strong> &rarr;
-      <strong style="color:#538d4e">green</strong>.<br>
-      Press <strong>Enter</strong> or click <em>Submit Row</em> to lock in the feedback and get the next recommendation.
+      <span class="help-desktop">
+        Type letters to fill the current row. Click each tile to cycle through
+        <strong style="color:#888">gray</strong> &rarr;
+        <strong style="color:#b59f3b">yellow</strong> &rarr;
+        <strong style="color:#538d4e">green</strong>.<br>
+        Press <strong>Enter</strong> or click <em>Submit Row</em> to lock in the feedback and get the next recommendation.
+      </span>
+      <span class="help-mobile">
+        Type a guess, or tap a recommended word to fill the row.
+        Tap each tile to cycle
+        <strong style="color:#888">gray</strong> &rarr;
+        <strong style="color:#b59f3b">yellow</strong> &rarr;
+        <strong style="color:#538d4e">green</strong>.
+        Then press Enter or Submit Row.
+      </span>
     </div>
   </div>
 
@@ -322,7 +591,8 @@
     <div id="explorer-controls">
       <div class="rec-label">Explore guess</div>
       <input id="explorer-input" type="text" maxlength="5" autocomplete="off"
-             spellcheck="false" placeholder="e.g. SLATE" />
+             autocapitalize="characters" autocorrect="off" spellcheck="false"
+             enterkeyhint="done" placeholder="e.g. SLATE" />
       <div id="explorer-scope">&hellip;</div>
       <div id="explorer-status"></div>
     </div>
@@ -336,6 +606,8 @@
     </div>
   </div>
 </div>
+
+<div id="keyboard" class="keyboard" role="group" aria-label="Guess keyboard"></div>
 
 <script src="Answers.js"></script>
 <script>
@@ -661,7 +933,12 @@ function filterPossible() {
 const grid = document.getElementById("grid");
 const recWord = document.getElementById("rec-word");
 const recInfo = document.getElementById("rec-info");
+const recHint = document.getElementById("rec-hint");
 const topGuessesEl = document.getElementById("top-guesses");
+const keyboardEl = document.getElementById("keyboard");
+const compactInputQuery = window.matchMedia(
+  "(max-width: 1100px), ((hover: none) and (pointer: coarse))"
+);
 const possibleCount = document.getElementById("possible-count");
 const possibleList = document.getElementById("possible-list");
 const submitBtn = document.getElementById("submit-btn");
@@ -711,13 +988,17 @@ function render() {
   }
   undoBtn.disabled = gameState.rows.length === 0;
   submitBtn.disabled = gameState.current.guess.length !== 5 || gameState.rows.length >= 6;
+  updateKeyboard();
+  scheduleFitBoard();
 }
 
 function setComputingMessage(html) {
-  recWord.className = "";
+  recWord.className = "status";
   recWord.innerHTML = `<span class="spinner"></span>${html}`;
   recInfo.textContent = "";
   topGuessesEl.innerHTML = "";
+  recHint.textContent = "";
+  scheduleFitBoard();
 }
 
 function renderTopGuesses(top, total) {
@@ -726,12 +1007,15 @@ function renderTopGuesses(top, total) {
   const header = document.createElement("div");
   header.className = "top-guess-row header";
   header.innerHTML =
-    "<span></span><span>Guess</span><span>Solve by next</span><span>In &le;2 more</span>";
+    "<span></span><span>Guess</span>" +
+    "<span><span class=\"hdr-long\">Solve by next</span><span class=\"hdr-short\">Next</span></span>" +
+    "<span><span class=\"hdr-long\">In &le;2 more</span><span class=\"hdr-short\">&le;2 more</span></span>";
   topGuessesEl.appendChild(header);
   for (let i = 0; i < top.length; i++) {
     const t = top[i];
     const row = document.createElement("div");
-    row.className = "top-guess-row";
+    row.className = "top-guess-row pickable";
+    row.dataset.word = ANSWERS[t.W];
     const p1 = ((t.tuple[0] / total) * 100).toFixed(1);
     const p2 = ((Math.min(t.tuple[1], total) / total) * 100).toFixed(1);
     row.innerHTML =
@@ -748,12 +1032,15 @@ function showRecommendation(top, possible) {
   recWord.className = "";
   recWord.innerHTML = "";
   recWord.textContent = word;
+  recWord.classList.add("pickable");
+  syncRecHint();
   recInfo.textContent =
     `${possible.length} possible answer${possible.length === 1 ? "" : "s"} remaining`;
   possibleCount.textContent = possible.length;
   possibleList.textContent = possible.map((i) => ANSWERS[i]).join("  ");
   renderTopGuesses(top, possible.length);
   prefillExplorerOnce(word);
+  scheduleFitBoard();
 }
 
 function showError(msg) {
@@ -764,6 +1051,8 @@ function showError(msg) {
   possibleCount.textContent = "0";
   possibleList.textContent = "";
   topGuessesEl.innerHTML = "";
+  recHint.textContent = "";
+  scheduleFitBoard();
 }
 
 async function recompute() {
@@ -802,30 +1091,224 @@ grid.addEventListener("click", (e) => {
   render();
 });
 
+function isCompactInput() {
+  return compactInputQuery.matches;
+}
+
+const phoneLandscapeQuery = window.matchMedia(
+  "(max-width: 1100px) and (max-height: 500px) and (orientation: landscape)"
+);
+
+let fitQueued = false;
+function scheduleFitBoard() {
+  if (fitQueued) return;
+  fitQueued = true;
+  requestAnimationFrame(() => {
+    fitQueued = false;
+    fitBoard();
+  });
+}
+
+function verticalSpace(el) {
+  if (!el) return 0;
+  const style = getComputedStyle(el);
+  return el.offsetHeight + (parseFloat(style.marginTop) || 0) + (parseFloat(style.marginBottom) || 0);
+}
+
+function fitBoard() {
+  if (!isCompactInput() || document.body.classList.contains("explorer-open") || phoneLandscapeQuery.matches) {
+    grid.style.width = "";
+    grid.style.removeProperty("--tile");
+    return;
+  }
+  if (grid.getClientRects().length === 0) return;
+
+  const controlsEl = document.querySelector("#solver-tab .controls");
+  const viewportH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  const rowGap = parseFloat(getComputedStyle(grid).rowGap) || 0;
+  const sampleRow = grid.querySelector(".row");
+  const colGap = sampleRow ? (parseFloat(getComputedStyle(sampleRow).columnGap) || 0) : rowGap;
+  // Document position, so refitting while the page is scrolled does not resize the board.
+  const anchorTop = grid.getBoundingClientRect().top + window.scrollY;
+  const available = viewportH - anchorTop - verticalSpace(controlsEl) - keyboardEl.offsetHeight - 10;
+  const parentWidth = solverTabEl ? solverTabEl.clientWidth : available;
+  const maxTile = Math.floor((parentWidth - colGap * 4) / 5);
+  let tile = Math.floor((available - rowGap * 5) / 6);
+  tile = Math.min(tile, maxTile, 82);
+  tile = Math.max(tile, 32);
+  grid.style.setProperty("--tile", tile + "px");
+  grid.style.width = (tile * 5 + colGap * 4) + "px";
+}
+
+function syncRecHint() {
+  if (!recWord.classList.contains("pickable")) {
+    recHint.textContent = "";
+    return;
+  }
+  recHint.textContent = isCompactInput()
+    ? "Tap a word, then color each tile."
+    : "";
+}
+
+function useGuess(word) {
+  if (!isCompactInput()) return;
+  if (!word || !/^[A-Z]{5}$/.test(word)) return;
+  if (gameState.rows.length >= 6) return;
+  gameState.current.guess = word;
+  gameState.current.feedback = [0, 0, 0, 0, 0];
+  render();
+}
+
+function typeLetter(letter) {
+  if (gameState.rows.length >= 6) return;
+  if (gameState.current.guess.length >= 5) return;
+  gameState.current.guess += letter;
+  render();
+}
+
+function deleteLetter() {
+  if (gameState.current.guess.length === 0) return;
+  const col = gameState.current.guess.length - 1;
+  gameState.current.guess = gameState.current.guess.slice(0, -1);
+  gameState.current.feedback[col] = 0;
+  render();
+}
+
+function activateKey(key) {
+  if (key === "ENTER") {
+    if (gameState.current.guess.length === 5 && gameState.rows.length < 6) submitRow();
+    return;
+  }
+  if (key === "BACK") {
+    deleteLetter();
+    return;
+  }
+  typeLetter(key);
+}
+
+function letterStates() {
+  const state = Object.create(null);
+  for (let r = 0; r < gameState.rows.length; r++) {
+    const row = gameState.rows[r];
+    for (let i = 0; i < 5; i++) {
+      const ch = row.guess[i];
+      const fb = row.feedback[i];
+      if (state[ch] === undefined || fb > state[ch]) state[ch] = fb;
+    }
+  }
+  return state;
+}
+
+function updateKeyboard() {
+  const state = letterStates();
+  const lockedOut = gameState.rows.length >= 6;
+  const keys = keyboardEl.querySelectorAll(".key");
+  for (let i = 0; i < keys.length; i++) {
+    const btn = keys[i];
+    const k = btn.dataset.key;
+    btn.classList.remove("gray", "yellow", "green");
+    if (k === "ENTER") {
+      btn.disabled = lockedOut || gameState.current.guess.length !== 5;
+    } else if (k === "BACK") {
+      btn.disabled = gameState.current.guess.length === 0;
+    } else {
+      const fb = state[k];
+      if (fb === 0) btn.classList.add("gray");
+      else if (fb === 1) btn.classList.add("yellow");
+      else if (fb === 2) btn.classList.add("green");
+    }
+  }
+}
+
+function buildKeyboard() {
+  const rows = [
+    ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
+    ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
+    ["ENTER", "Z", "X", "C", "V", "B", "N", "M", "BACK"],
+  ];
+  const inner = document.createElement("div");
+  inner.className = "keyboard-inner";
+  for (let r = 0; r < rows.length; r++) {
+    const rowEl = document.createElement("div");
+    rowEl.className = "kb-row";
+    if (r === 1) {
+      const lead = document.createElement("span");
+      lead.className = "kb-spacer";
+      lead.setAttribute("aria-hidden", "true");
+      rowEl.appendChild(lead);
+    }
+    for (let c = 0; c < rows[r].length; c++) {
+      const key = rows[r][c];
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "key";
+      btn.dataset.key = key;
+      if (key === "ENTER") {
+        btn.classList.add("wide");
+        btn.textContent = "Enter";
+        btn.setAttribute("aria-label", "Enter");
+      } else if (key === "BACK") {
+        btn.classList.add("wide");
+        btn.textContent = "\u232B";
+        btn.setAttribute("aria-label", "Delete letter");
+      } else {
+        btn.textContent = key;
+      }
+      rowEl.appendChild(btn);
+    }
+    if (r === 1) {
+      const tail = document.createElement("span");
+      tail.className = "kb-spacer";
+      tail.setAttribute("aria-hidden", "true");
+      rowEl.appendChild(tail);
+    }
+    inner.appendChild(rowEl);
+  }
+  keyboardEl.appendChild(inner);
+  keyboardEl.addEventListener("click", (e) => {
+    const btn = e.target.closest(".key");
+    if (!btn || btn.disabled) return;
+    activateKey(btn.dataset.key);
+  });
+}
+
 document.addEventListener("keydown", (e) => {
+  if (document.body.classList.contains("explorer-open")) return;
   if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
   if (e.key === "Enter") {
     e.preventDefault();
-    if (gameState.current.guess.length === 5 && gameState.rows.length < 6) submitRow();
+    activateKey("ENTER");
     return;
   }
   if (e.key === "Backspace") {
     e.preventDefault();
-    if (gameState.current.guess.length > 0) {
-      const col = gameState.current.guess.length - 1;
-      gameState.current.guess = gameState.current.guess.slice(0, -1);
-      gameState.current.feedback[col] = 0;
-      render();
-    }
+    activateKey("BACK");
     return;
   }
   if (e.key.length === 1 && /^[a-zA-Z]$/.test(e.key)) {
-    if (gameState.current.guess.length < 5 && gameState.rows.length < 6) {
-      gameState.current.guess += e.key.toUpperCase();
-      render();
-    }
+    typeLetter(e.key.toUpperCase());
   }
 });
+
+recWord.addEventListener("click", () => {
+  if (!recWord.classList.contains("pickable")) return;
+  useGuess(recWord.textContent.trim());
+});
+
+topGuessesEl.addEventListener("click", (e) => {
+  const row = e.target.closest(".top-guess-row.pickable");
+  if (!row) return;
+  useGuess(row.dataset.word);
+});
+
+if (typeof compactInputQuery.addEventListener === "function") {
+  compactInputQuery.addEventListener("change", () => {
+    syncRecHint();
+    scheduleFitBoard();
+  });
+}
+window.addEventListener("resize", scheduleFitBoard);
+if (window.visualViewport) window.visualViewport.addEventListener("resize", scheduleFitBoard);
 
 function submitRow() {
   if (gameState.current.guess.length !== 5) return;
@@ -1056,6 +1539,8 @@ function switchTab(tabId) {
   });
   solverTabEl.classList.toggle("active", tabId === "solver");
   explorerTabEl.classList.toggle("active", tabId === "explorer");
+  document.body.classList.toggle("explorer-open", tabId === "explorer");
+  scheduleFitBoard();
   if (tabId === "explorer" && explorerState.needsRecompute) {
     recomputeExplorer();
   }
@@ -1083,6 +1568,7 @@ explorerInputEl.addEventListener("input", () => {
 // --- Init ---
 
 async function init() {
+  buildKeyboard();
   render();
   setComputingMessage("Initializing&hellip;");
   setExplorerStatus(`<span class="spinner"></span>Initializing&hellip;`, false);
